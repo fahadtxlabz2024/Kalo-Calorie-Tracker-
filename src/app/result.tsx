@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image as RNImage, ScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useSegments } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import { ChevronLeft, Trash2, Check } from 'lucide-react-native';
 import { useMeals } from '../context/MealContext';
@@ -35,11 +35,15 @@ const SIDE_OPTIONS = [
 export default function ResultScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ imageUri?: string }>();
+  const segments = useSegments();
   const { pendingImageUri, addMeal } = useMeals();
   
   const rawUri = Array.isArray(params.imageUri) ? params.imageUri[0] : params.imageUri;
   const imageUri = pendingImageUri || rawUri || null;
 
+  const currentScreen = () => {
+    console.log('I am on the screen:', segments);
+  };
 
   // Generate a random meal result between 500 and 1100 kcal
   const mealData = useMemo(() => {
@@ -108,7 +112,7 @@ export default function ResultScreen() {
       imageUri: imageUri || null,
       items: mealData.items,
     });
-
+    currentScreen();
     router.push('/today');
   };
 

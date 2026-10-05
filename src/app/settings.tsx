@@ -14,15 +14,19 @@ import {
   HelpCircle, 
   ShieldCheck, 
   Trash2, 
+  LogOut,
   ChevronRight,
   ChevronDown,
   Check
 } from 'lucide-react-native';
 import { useMeals } from '../context/MealContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { clearMeals } = useMeals();
+  const { signOut, user } = useAuth();
+
 
   // Interactive settings state
   const [mealReminders, setMealReminders] = useState(true);
@@ -199,6 +203,23 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
+          {/* Sign Out Button */}
+          <TouchableOpacity 
+            style={styles.settingRow} 
+            activeOpacity={0.7}
+            onPress={async () => {
+              await signOut();
+              router.replace('/auth/LoginScreen');
+            }}
+          >
+            <View style={styles.settingLeft}>
+              <LogOut size={20} color="#EF4444" />
+              <Text style={[styles.settingLabel, { color: '#EF4444' }]}>Sign out</Text>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
           {/* Delete My Data */}
           <TouchableOpacity 
             style={styles.settingRow} 
@@ -211,6 +232,7 @@ export default function SettingsScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
 
         {/* Footer Info Note */}
         <Text style={styles.footerNote}>
@@ -259,11 +281,11 @@ export default function SettingsScreen() {
                   <Text style={styles.dropdownOptionSubtext}>Kilograms & Centimeters</Text>
                 </View>
 
-                {unitSystem === 'metric' && (
+                {unitSystem === 'metric' ? (
                   <View style={styles.checkBadge}>
                     <Check size={16} color="#FFFFFF" strokeWidth={3} />
                   </View>
-                )}
+                ) : null}
               </TouchableOpacity>
 
               {/* Option 2: Imperial */}
@@ -285,11 +307,11 @@ export default function SettingsScreen() {
                   <Text style={styles.dropdownOptionSubtext}>Pounds, Feet & Inches</Text>
                 </View>
 
-                {unitSystem === 'imperial' && (
+                {unitSystem === 'imperial' ? (
                   <View style={styles.checkBadge}>
                     <Check size={16} color="#FFFFFF" strokeWidth={3} />
                   </View>
-                )}
+                ) : null}
               </TouchableOpacity>
             </View>
           </View>

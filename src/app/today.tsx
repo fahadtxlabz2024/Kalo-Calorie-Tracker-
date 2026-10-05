@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image as RNImage } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 import { Image as ExpoImage } from 'expo-image';
 import Svg, { Circle, G } from 'react-native-svg';
 import { Camera, SlidersHorizontal, Flame } from 'lucide-react-native';
@@ -10,10 +10,30 @@ import { useMeals } from '../context/MealContext';
 
 export default function TodayScreen() {
   const router = useRouter();
+  const segments = useSegments();
   const { meals } = useMeals();
 
   // Dynamic current date calculations
   const today = useMemo(() => new Date(), []);
+
+  const currentScreen = () => {
+    console.log('Current Screen Segments:', segments);
+  };
+
+  // Auto-navigate to subscription after 3 seconds when on 'today' segment with 0 photos left
+  useEffect(() => {
+    const segmentList = segments as string[];
+    const isTodaySegment = segmentList.includes('today') || segmentList.length === 0;
+    const isPhotoLeftZero = meals.length >= 3;
+
+    if (isTodaySegment && isPhotoLeftZero) {
+      const timer = setTimeout(() => {
+        router.push('/subscriptions/subscriptions');
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [segments, meals.length, router]);
 
   const headerSubtitle = useMemo(() => {
     const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -296,19 +316,51 @@ export default function TodayScreen() {
         {/* Bottom Action Area */}
         <View style={styles.bottomContainer}>
           <TouchableOpacity
-            style={styles.snapButton}
-            activeOpacity={0.85}
-            onPress={handleSnapMeal}
+            style={[
+              styles.snapButton,
+              meals.length >= 3 && styles.snapButtonDisabled,
+            ]}
+            activeOpacity={meals.length >= 3 ? 1 : 0.85}
+            disabled={meals.length >= 3}
+            onPress={() => {
+              handleSnapMeal();
+              currentScreen();
+            }}
           >
-            <Camera size={22} color="#FFFFFF" />
-            <Text style={styles.snapButtonText}>Snap a meal</Text>
+            <Camera
+              size={22}
+              color={meals.length >= 3 ? '#94A3B8' : '#FFFFFF'}
+            />
+            <Text
+              style={[
+                styles.snapButtonText,
+                meals.length >= 3 && styles.snapButtonTextDisabled,
+              ]}
+            >
+              Snap a meal
+            </Text>
           </TouchableOpacity>
 
-          <Text style={styles.freePhotosText}>
-            {meals.length >= 3
-              ? 'No free photos left today · Go unlimited'
-              : `${3 - meals.length} free photos left today`}
-          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              currentScreen();
+              if (meals.length >= 3) {
+                router.push('/subscriptions/subscriptions');
+              }
+            }}
+            activeOpacity={meals.length >= 3 ? 0.7 : 1}
+          >
+            <Text
+              style={[
+                styles.freePhotosText,
+                meals.length >= 3 && styles.freePhotosTextUnlimited,
+              ]}
+            >
+              {meals.length >= 3
+                ? 'No photos left today · Go unlimited'
+                : `${3 - meals.length} free photos left today`}
+            </Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -650,10 +702,24 @@ const styles = StyleSheet.create({
       fontSize: 18,
       fontWeight: '700',
     },
+    snapButtonDisabled: {
+      backgroundColor: '#E2E8F0',
+      shadowOpacity: 0,
+      elevation: 0,
+      borderWidth: 1,
+      borderColor: '#CBD5E1',
+    },
+    snapButtonTextDisabled: {
+      color: '#94A3B8',
+    },
     freePhotosText: {
       fontSize: 13,
       fontWeight: '500',
       color: '#64748B',
       marginTop: 10,
+    },
+    freePhotosTextUnlimited: {
+      color: '#17A558',
+      fontWeight: '700',
     },
   });

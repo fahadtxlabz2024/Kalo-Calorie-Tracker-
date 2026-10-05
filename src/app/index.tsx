@@ -4,14 +4,28 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { supabase } from '../lib/supabase';
 
 export default function SplashScreen() {
   const router = useRouter();
 
   useEffect(() => {
+    const checkAuthAndNavigate = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          router.replace('/today');
+        } else {
+          router.replace('/auth/LoginScreen');
+        }
+      } catch (err) {
+        router.replace('/auth/LoginScreen');
+      }
+    };
+
     const timer = setTimeout(() => {
-      router.replace('/welcome');
-    }, 3000);
+      checkAuthAndNavigate();
+    }, 2500);
 
     return () => clearTimeout(timer);
   }, [router]);
@@ -37,6 +51,7 @@ export default function SplashScreen() {
     </SafeAreaView>
   );
 }
+
 
 const { width } = Dimensions.get('window');
 
