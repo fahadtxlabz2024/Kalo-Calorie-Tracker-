@@ -17,7 +17,8 @@ export default function RootLayout() {
           <Stack.Screen name="plan" />
           <Stack.Screen name="today" />
           <Stack.Screen name="settings" />
-          <Stack.Screen name="subscriptions/subscriptions" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="subscriptions/subscriptions" />
+          <Stack.Screen name="subscriptions/payment" />
         </Stack>
       </MealProvider>
     </AuthProvider>

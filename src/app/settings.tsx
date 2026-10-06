@@ -19,8 +19,10 @@ import {
   ChevronDown,
   Check
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMeals } from '../context/MealContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -34,6 +36,7 @@ export default function SettingsScreen() {
   const [backupData, setBackupData] = useState(false);
   const [showUnitsDropdown, setShowUnitsDropdown] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Dynamic unit strings and conversion (78 kg -> 172 lbs, 172 cm -> 5' 8")
   const unitText = unitSystem === 'metric' ? 'kg · cm' : 'lbs · ft/in';
@@ -44,10 +47,41 @@ export default function SettingsScreen() {
     setShowUnitsDropdown(false);
   };
 
-  const handleConfirmDelete = () => {
-    clearMeals();
-    setShowDeleteModal(false);
-    router.replace('/today');
+  const handleConfirmDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      if (user) {
+        // 1. Delete user from Supabase Auth (auth.users) via RPC function
+        const { error: rpcError } = await supabase.rpc('delete_user');
+        if (rpcError) {
+          console.warn('Supabase delete_user RPC warning:', rpcError.message);
+          // Fallback manual table row delete if RPC function has not been created yet
+          if (user.email) {
+            await supabase.from('subscriptions').delete().eq('email', user.email);
+          }
+        }
+      }
+
+      // 2. Clear local meals state
+      clearMeals();
+
+      // 3. Clear all AsyncStorage keys completely
+      await AsyncStorage.clear();
+
+      // 4. Sign out session
+      await signOut();
+
+      setShowDeleteModal(false);
+      router.replace('/auth/LoginScreen');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      await AsyncStorage.clear();
+      await signOut();
+      setShowDeleteModal(false);
+      router.replace('/auth/LoginScreen');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -220,7 +254,7 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          {/* Delete My Data */}
+          {/* Delete Account */}
           <TouchableOpacity 
             style={styles.settingRow} 
             activeOpacity={0.7}
@@ -228,7 +262,7 @@ export default function SettingsScreen() {
           >
             <View style={styles.settingLeft}>
               <Trash2 size={20} color="#EF4444" />
-              <Text style={[styles.settingLabel, { color: '#EF4444' }]}>Delete my data</Text>
+              <Text style={[styles.settingLabel, { color: '#EF4444' }]}>Delete account</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -318,7 +352,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Delete Data Confirmation Modal */}
+      {/* Delete Account Confirmation Modal */}
       <Modal
         visible={showDeleteModal}
         transparent
@@ -331,9 +365,9 @@ export default function SettingsScreen() {
               <Trash2 size={28} color="#EF4444" />
             </View>
 
-            <Text style={styles.modalTitle}>Delete all data?</Text>
+            <Text style={styles.modalTitle}>Delete account?</Text>
             <Text style={styles.modalDescription}>
-              This will permanently remove all your logged meals, progress, and personal details. This action cannot be undone.
+              This will permanently remove your account, subscription records, and clear all local data. This action cannot be undone.
             </Text>
 
             <View style={styles.modalButtonRow}>
@@ -341,6 +375,7 @@ export default function SettingsScreen() {
                 style={styles.cancelButton} 
                 activeOpacity={0.7}
                 onPress={() => setShowDeleteModal(false)}
+                disabled={deleting}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -348,9 +383,12 @@ export default function SettingsScreen() {
               <TouchableOpacity 
                 style={styles.deleteButton} 
                 activeOpacity={0.85}
-                onPress={handleConfirmDelete}
+                onPress={handleConfirmDeleteAccount}
+                disabled={deleting}
               >
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.deleteButtonText}>
+                  {deleting ? 'Deleting...' : 'Delete Account'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

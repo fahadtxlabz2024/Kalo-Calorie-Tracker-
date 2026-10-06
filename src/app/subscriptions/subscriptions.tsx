@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,48 @@ import {
   ScrollView,
   SafeAreaView,
   Pressable,
+  Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import {
-  X,
+  ArrowLeft,
   Sparkles,
   Camera,
   Calendar,
   BarChart2,
   Check,
 } from 'lucide-react-native';
+import { useAuth } from '../../context/AuthContext';
+import {
+  getSubscriptionData,
+  saveSubscriptionData,
+  PlanType,
+} from '../../lib/subscriptionStorage';
 
 export default function SubscriptionsScreen() {
   const router = useRouter();
-  const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly'>('yearly');
+  const { user } = useAuth();
+
+  const [hasUsedTrial, setHasUsedTrial] = useState<boolean>(false);
+  const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly' | null>(null);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    getSubscriptionData(user?.email).then((data) => {
+      if (isMounted) {
+        setHasUsedTrial(data.hasUsedTrial);
+        // No pre-selected plan by default
+        setSelectedPlan(null);
+        setIsLoaded(true);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.email]);
 
   const handleClose = () => {
     if (router.canGoBack()) {
@@ -31,9 +58,48 @@ export default function SubscriptionsScreen() {
     }
   };
 
-  const handleStartTrial = () => {
-    // Action for subscribing / trial start
-    handleClose();
+  const handleStartTrial = async () => {
+    try {
+      await saveSubscriptionData(
+        {
+          planType: 'trial',
+          hasUsedTrial: true,
+          subscriptionCreatedAt: new Date().toISOString(),
+        },
+        user?.email
+      );
+      setHasUsedTrial(true);
+
+      Alert.alert(
+        'Trial Started!',
+        'Your 7-day free trial has officially begun.',
+        [{ text: 'Great!', onPress: handleClose }]
+      );
+    } catch (err) {
+      console.error('Failed to start trial:', err);
+      Alert.alert('Error', 'Could not start your free trial. Please try again.');
+    }
+  };
+
+  const handleProceedToPayment = () => {
+    if (!selectedPlan) return;
+    router.push({
+      pathname: '/subscriptions/payment',
+      params: { plan: selectedPlan },
+    });
+  };
+
+  // Dynamic footer message logic based on user state & selected plan
+  const getFooterText = () => {
+    if (selectedPlan === 'yearly') {
+      return 'Billed annually at $29.99/yr. Cancel anytime.';
+    }
+    if (selectedPlan === 'monthly') {
+      return 'Billed monthly at $4.99/mo. Cancel anytime.';
+    }
+    return !hasUsedTrial
+      ? '7 days free, then choose a plan. Cancel anytime.'
+      : 'Choose a plan above to continue.';
   };
 
   return (
@@ -48,7 +114,7 @@ export default function SubscriptionsScreen() {
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <X size={20} color="#0F172A" strokeWidth={2.5} />
+          <ArrowLeft size={20} color="#0F172A" strokeWidth={2.5} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -147,8 +213,23 @@ export default function SubscriptionsScreen() {
               </View>
             </View>
 
-            <Text style={styles.planPrice}>$29.99</Text>
-            <Text style={styles.planSubtext}>$2.50 / month</Text>
+            <View style={styles.cardBottomRow}>
+              <View>
+                <Text style={styles.planPrice}>$29.99</Text>
+                <Text style={styles.planSubtext}>$2.50 / month</Text>
+              </View>
+
+              <View
+                style={[
+                  styles.radioOuter,
+                  selectedPlan === 'yearly' && styles.radioOuterSelected,
+                ]}
+              >
+                {selectedPlan === 'yearly' && (
+                  <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                )}
+              </View>
+            </View>
           </Pressable>
 
           {/* Monthly Plan */}
@@ -169,7 +250,6 @@ export default function SubscriptionsScreen() {
                 Monthly
               </Text>
 
-              {/* Radio Indicator */}
               <View
                 style={[
                   styles.radioOuter,
@@ -177,7 +257,7 @@ export default function SubscriptionsScreen() {
                 ]}
               >
                 {selectedPlan === 'monthly' && (
-                  <View style={styles.radioInner} />
+                  <Check size={12} color="#FFFFFF" strokeWidth={3} />
                 )}
               </View>
             </View>
@@ -187,22 +267,39 @@ export default function SubscriptionsScreen() {
           </Pressable>
         </View>
 
-        {/* CTA Button */}
-        <TouchableOpacity
-          style={styles.ctaButton}
-          onPress={handleStartTrial}
-          activeOpacity={0.88}
-        >
-          <Text style={styles.ctaButtonText}>Start 7-day free trial</Text>
-        </TouchableOpacity>
+        {/* CTA Container with Constant Height */}
+        <View style={styles.ctaContainer}>
+          {selectedPlan !== null ? (
+            /* When user selects any plan card, button becomes 'Proceed to Payment' */
+            <TouchableOpacity
+              style={styles.ctaButton}
+              onPress={handleProceedToPayment}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.ctaButtonText}>Proceed to Payment</Text>
+            </TouchableOpacity>
+          ) : !hasUsedTrial ? (
+            /* Initial state for new user: 'Start 7-day free trial' button */
+            <TouchableOpacity
+              style={styles.ctaButton}
+              onPress={handleStartTrial}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.ctaButtonText}>Start 7-day free trial</Text>
+            </TouchableOpacity>
+          ) : (
+            /* When trial already used and no plan card selected */
+            <View style={styles.ctaDisabledBox}>
+              <Text style={styles.ctaDisabledText}>
+                Select subscription plan of your choice
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* Footer Notes */}
         <View style={styles.footerContainer}>
-          <Text style={styles.footerText}>
-            {selectedPlan === 'yearly'
-              ? 'Then $29.99 / year. Cancel anytime.'
-              : 'Then $4.99 / month. Cancel anytime.'}
-          </Text>
+          <Text style={styles.footerText}>{getFooterText()}</Text>
           <Text style={styles.footerText}>
             3 photos a day stay free. No ads, ever.
           </Text>
@@ -343,6 +440,7 @@ const styles = StyleSheet.create({
   },
   selectedPlanTitle: {
     color: '#166534',
+    fontWeight: '800',
   },
   saveBadge: {
     backgroundColor: '#17A558',
@@ -356,22 +454,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.2,
   },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
   radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
     borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   radioOuterSelected: {
     borderColor: '#17A558',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
     backgroundColor: '#17A558',
   },
   planPrice: {
@@ -386,13 +485,17 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  ctaContainer: {
+    height: 56,
+    marginBottom: 16,
+    justifyContent: 'center',
+  },
   ctaButton: {
     backgroundColor: '#17A558',
     height: 56,
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
     shadowColor: '#17A558',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -403,6 +506,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '700',
+  },
+  ctaDisabledBox: {
+    backgroundColor: '#E2E8F0',
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  ctaDisabledText: {
+    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   footerContainer: {
     alignItems: 'center',
