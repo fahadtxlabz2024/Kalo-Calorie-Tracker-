@@ -14,6 +14,7 @@ import {
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SignUpSuccessModal from './SignUpSuccessModal';
 import { supabase } from '../../lib/supabase';
 
@@ -58,6 +59,7 @@ const SignUpScreen = () => {
           data: {
             full_name: fullname.trim(),
             contact: contact.trim(),
+            is_new_user: true,
           },
         },
       });
@@ -65,11 +67,8 @@ const SignUpScreen = () => {
       if (error) {
         setErrorMessage(error.message);
       } else {
-        if (data.session) {
-          router.replace('/today');
-        } else {
-          setModalVisibility(true);
-        }
+        await AsyncStorage.setItem(`@kalo_is_new_user_${email.trim()}`, 'true');
+        setModalVisibility(true);
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'Signup failed. Please try again.');

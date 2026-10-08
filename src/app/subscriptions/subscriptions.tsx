@@ -5,14 +5,15 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   Pressable,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
+
   Sparkles,
   Camera,
   Calendar,
@@ -84,7 +85,7 @@ export default function SubscriptionsScreen() {
   const handleProceedToPayment = () => {
     if (!selectedPlan) return;
     router.push({
-      pathname: '/subscriptions/payment',
+      pathname: '/subscriptions/reviewSubscriptionDetail' as any,
       params: { plan: selectedPlan },
     });
   };

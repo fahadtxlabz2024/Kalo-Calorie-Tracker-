@@ -1,17 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
+import {
+  generateRandomCalorieGoal,
+  getUserProfile,
+  saveUserProfile,
+  UserProfileData,
+} from '../lib/userProfile';
 
 export default function YourPlanScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [remindMeals, setRemindMeals] = useState(true);
+  const [profile, setProfile] = useState<UserProfileData | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const initPlan = async () => {
+      // 1. Generate new random calorie goal (2500 - 3000 kcal)
+      const randomKcal = generateRandomCalorieGoal();
+      
+      // 2. Save updated calorie goal to profile
+      const updated = await saveUserProfile(randomKcal, user?.email);
+      if (isMounted) {
+        setProfile(updated);
+      }
+    };
+
+    initPlan();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.email]);
 
   const handleLetsGo = () => {
     // Navigate to Main Dashboard screen
     router.push('/today');
   };
+
+  const calorieGoalText = profile?.calorieGoal
+    ? profile.calorieGoal.toLocaleString()
+    : '2,650';
+  const carbsText = profile?.carbsGoal ? `${profile.carbsGoal} g` : '298 g';
+  const proteinText = profile?.proteinGoal ? `${profile.proteinGoal} g` : '166 g';
+  const fatText = profile?.fatGoal ? `${profile.fatGoal} g` : '88 g';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -52,7 +87,7 @@ export default function YourPlanScreen() {
           <Text style={styles.goalCategory}>DAILY GOAL</Text>
           
           <View style={styles.kcalRow}>
-            <Text style={styles.kcalNumber}>2,000</Text>
+            <Text style={styles.kcalNumber}>{calorieGoalText}</Text>
             <Text style={styles.kcalUnit}> kcal</Text>
           </View>
 
@@ -64,7 +99,7 @@ export default function YourPlanScreen() {
                 <View style={[styles.dot, { backgroundColor: '#F59E0B' }]} />
                 <Text style={styles.macroLabel}>Carbs</Text>
               </View>
-              <Text style={styles.macroValue}>225 g</Text>
+              <Text style={styles.macroValue}>{carbsText}</Text>
             </View>
 
             {/* Protein */}
@@ -73,7 +108,7 @@ export default function YourPlanScreen() {
                 <View style={[styles.dot, { backgroundColor: '#3B82F6' }]} />
                 <Text style={styles.macroLabel}>Protein</Text>
               </View>
-              <Text style={styles.macroValue}>125 g</Text>
+              <Text style={styles.macroValue}>{proteinText}</Text>
             </View>
 
             {/* Fat */}
@@ -82,16 +117,19 @@ export default function YourPlanScreen() {
                 <View style={[styles.dot, { backgroundColor: '#A855F7' }]} />
                 <Text style={styles.macroLabel}>Fat</Text>
               </View>
-              <Text style={styles.macroValue}>67 g</Text>
+              <Text style={styles.macroValue}>{fatText}</Text>
             </View>
           </View>
 
           {/* Target Weight Loss Pill Badge */}
           <View style={styles.targetBadge}>
             <Text style={styles.targetIcon}>🎯</Text>
-            <Text style={styles.targetText}>Set to lose about 0.5 kg a week</Text>
+            <Text style={styles.targetText}>
+              Set to {profile?.goal ? profile.goal.toLowerCase() : 'lose'} weight
+            </Text>
           </View>
         </View>
+
 
         {/* Notification Settings Card */}
         <View style={styles.reminderCard}>

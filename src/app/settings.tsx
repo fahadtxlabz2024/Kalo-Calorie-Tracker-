@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Modal, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,12 +23,38 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMeals } from '../context/MealContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { getSubscriptionData } from '../lib/subscriptionStorage';
+import { getUserProfile, UserProfileData, DEFAULT_USER_PROFILE } from '../lib/userProfile';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { clearMeals } = useMeals();
   const { signOut, user } = useAuth();
 
+  // Subscription state
+  const [hasUsedTrial, setHasUsedTrial] = useState<boolean>(false);
+  const [planType, setPlanType] = useState<string>('none');
+  const [userProfile, setUserProfile] = useState<UserProfileData>(DEFAULT_USER_PROFILE);
+
+  useEffect(() => {
+    let isMounted = true;
+    getSubscriptionData(user?.email).then((data) => {
+      if (isMounted) {
+        setHasUsedTrial(data.hasUsedTrial);
+        setPlanType(data.planType);
+      }
+    });
+
+    getUserProfile(user?.email).then((prof) => {
+      if (isMounted) {
+        setUserProfile(prof);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.email]);
 
   // Interactive settings state
   const [mealReminders, setMealReminders] = useState(true);
@@ -38,9 +64,24 @@ export default function SettingsScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Dynamic unit strings and conversion (78 kg -> 172 lbs, 172 cm -> 5' 8")
+  // Dynamic unit strings and conversion based on userProfile from About screen
   const unitText = unitSystem === 'metric' ? 'kg · cm' : 'lbs · ft/in';
-  const detailsText = unitSystem === 'metric' ? '78 kg · 172 cm' : '172 lbs · 5\' 8"';
+  const rawWeight = userProfile.weight || '78';
+  const rawHeight = userProfile.height || '172';
+  const weightNum = parseFloat(rawWeight) || 78;
+  const heightNum = parseFloat(rawHeight) || 172;
+
+  const displayWeight = unitSystem === 'metric'
+    ? `${weightNum} kg`
+    : `${Math.round(weightNum * 2.20462)} lbs`;
+
+  const displayHeight = unitSystem === 'metric'
+    ? `${heightNum} cm`
+    : `${Math.floor(heightNum / 30.48)}' ${Math.round((heightNum % 30.48) / 2.54)}"`;
+
+  const detailsText = `${displayWeight} · ${displayHeight}`;
+  const calorieGoalText = `${(userProfile.calorieGoal || 2650).toLocaleString()} kcal`;
+
 
   const selectUnitSystem = (system: 'metric' | 'imperial') => {
     setUnitSystem(system);
@@ -62,19 +103,26 @@ export default function SettingsScreen() {
         }
       }
 
-      // 2. Clear local meals state
+      // 2. Clear local meals state & AsyncStorage keys completely
       clearMeals();
 
-      // 3. Clear all AsyncStorage keys completely
+      if (user?.email) {
+        await AsyncStorage.removeItem(`@kalo_is_new_user_${user.email}`);
+        await AsyncStorage.removeItem(`@kalo_user_profile_${user.email}`);
+      }
       await AsyncStorage.clear();
 
-      // 4. Sign out session
+      // 3. Sign out session
       await signOut();
 
       setShowDeleteModal(false);
       router.replace('/auth/LoginScreen');
     } catch (error) {
       console.error('Error deleting account:', error);
+      if (user?.email) {
+        await AsyncStorage.removeItem(`@kalo_is_new_user_${user.email}`);
+        await AsyncStorage.removeItem(`@kalo_user_profile_${user.email}`);
+      }
       await AsyncStorage.clear();
       await signOut();
       setShowDeleteModal(false);
@@ -107,22 +155,29 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Kalo Plus Promo Banner */}
-        <TouchableOpacity style={styles.kaloPlusCard} activeOpacity={0.85}>
-          <View style={styles.kaloPlusLeft}>
-            <View style={styles.starBadge}>
-              <Sparkles size={22} color="#121C16" fill="#121C16" />
+        {/* Kalo Plus Promo Banner - Hidden when trial has been used or active subscription */}
+        {!hasUsedTrial && planType === 'none' && (
+          <TouchableOpacity
+            style={styles.kaloPlusCard}
+            activeOpacity={0.85}
+            onPress={() => router.push('/subscriptions/subscriptions')}
+          >
+            <View style={styles.kaloPlusLeft}>
+              <View style={styles.starBadge}>
+                <Sparkles size={22} color="#121C16" fill="#121C16" />
+              </View>
+              <View style={styles.kaloPlusTextGroup}>
+                <Text style={styles.kaloPlusTitle}>Kalo Plus</Text>
+                <Text style={styles.kaloPlusSubtitle}>Unlimited meal photos</Text>
+              </View>
             </View>
-            <View style={styles.kaloPlusTextGroup}>
-              <Text style={styles.kaloPlusTitle}>Kalo Plus</Text>
-              <Text style={styles.kaloPlusSubtitle}>Unlimited meal photos</Text>
-            </View>
-          </View>
 
-          <View style={styles.tryFreeButton}>
-            <Text style={styles.tryFreeText}>Try free</Text>
-          </View>
-        </TouchableOpacity>
+            <View style={styles.tryFreeButton}>
+              <Text style={styles.tryFreeText}>Try free</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
 
         {/* First Settings Group (Goals & Preferences) */}
         <View style={styles.sectionCard}>
@@ -133,7 +188,7 @@ export default function SettingsScreen() {
               <Text style={styles.settingLabel}>Daily goal</Text>
             </View>
             <View style={styles.settingRight}>
-              <Text style={styles.settingValue}>2,000 kcal</Text>
+              <Text style={styles.settingValue}>{calorieGoalText}</Text>
             </View>
           </View>
 

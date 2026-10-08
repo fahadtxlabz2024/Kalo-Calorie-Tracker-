@@ -9,6 +9,7 @@ import Svg, { Circle, G } from 'react-native-svg';
 import { useMeals } from '../context/MealContext';
 import { useAuth } from '../context/AuthContext';
 import { getSubscriptionData } from '../lib/subscriptionStorage';
+import { getUserProfile, UserProfileData, DEFAULT_USER_PROFILE } from '../lib/userProfile';
 
 export default function TodayScreen() {
   const router = useRouter();
@@ -16,8 +17,9 @@ export default function TodayScreen() {
   const { meals } = useMeals();
   const { user } = useAuth();
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const [userProfile, setUserProfile] = useState<UserProfileData>(DEFAULT_USER_PROFILE);
 
-  // Check subscription status whenever screen is viewed
+  // Check subscription and user profile status whenever screen is viewed
   useEffect(() => {
     let isMounted = true;
     getSubscriptionData(user?.email).then((data) => {
@@ -25,6 +27,13 @@ export default function TodayScreen() {
         setIsSubscribed(data.planType !== 'none');
       }
     });
+
+    getUserProfile(user?.email).then((prof) => {
+      if (isMounted) {
+        setUserProfile(prof);
+      }
+    });
+
     return () => {
       isMounted = false;
     };
@@ -69,11 +78,13 @@ export default function TodayScreen() {
       };
     });
   }, [today]);
-  // Goals
-  const calorieGoal = 2000;
-  const carbsGoal = 225;
-  const proteinGoal = 125;
-  const fatGoal = 67;
+
+  // Dynamic Goals synced from userProfile
+  const calorieGoal = userProfile.calorieGoal || 2650;
+  const carbsGoal = userProfile.carbsGoal || 298;
+  const proteinGoal = userProfile.proteinGoal || 166;
+  const fatGoal = userProfile.fatGoal || 88;
+
 
   // Calculate dynamic totals from logged meals
   const totalEaten = meals.reduce((sum, m) => sum + m.totalKcal, 0);
@@ -112,7 +123,9 @@ export default function TodayScreen() {
         {/* Top Header: Title & Action Icons */}
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerTitle}>Welcome {user?.user_metadata.fullname}</Text>
+            <Text style={styles.headerTitle}>
+              Welcome {user?.user_metadata?.full_name || user?.user_metadata?.fullname || user?.user_metadata?.name || ''}
+            </Text>
             <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
           </View>
 
@@ -380,7 +393,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.5,

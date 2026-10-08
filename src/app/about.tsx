@@ -3,9 +3,12 @@ import { View, Text, TouchableOpacity, TextInput, StyleSheet, ScrollView } from 
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
+import { saveUserProfile } from '../lib/userProfile';
 
 export default function AboutYouScreen() {
   const router = useRouter();
+  const { user } = useAuth();
 
   // State for form selections
   const [goal, setGoal] = useState<'Lose' | 'Keep' | 'Gain'>('Lose');
@@ -18,10 +21,26 @@ export default function AboutYouScreen() {
   // Track focused text input
   const [focusedField, setFocusedField] = useState<'age' | 'height' | 'weight' | null>(null);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    try {
+      await saveUserProfile(
+        {
+          goal,
+          sex,
+          age,
+          height,
+          weight,
+          activity,
+        },
+        user?.email
+      );
+    } catch (err) {
+      console.error('Error saving user profile on about screen:', err);
+    }
     // Navigate to Step 2 of onboarding
     router.push('/plan');
   };
+
 
   return (
     <SafeAreaView style={styles.container}>

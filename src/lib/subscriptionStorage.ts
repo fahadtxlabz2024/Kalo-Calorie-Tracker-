@@ -11,6 +11,7 @@ export interface SubscriptionData {
   planType: PlanType;
   hasUsedTrial: boolean;
   subscriptionCreatedAt: string | null;
+  trialExpiredNotified?: boolean;
 }
 
 /**
@@ -87,6 +88,7 @@ export const getSubscriptionData = async (
           planType: data.plan_type as PlanType,
           hasUsedTrial: data.has_used_trial,
           subscriptionCreatedAt: data.subscription_created_at,
+          trialExpiredNotified: localData?.trialExpiredNotified ?? false,
         };
 
         // Sync remote data into local storage
@@ -103,6 +105,7 @@ export const getSubscriptionData = async (
     planType: 'none',
     hasUsedTrial: false,
     subscriptionCreatedAt: null,
+    trialExpiredNotified: false,
   };
 
   // Auto-expire trial or paid subscription if duration elapsed
@@ -112,7 +115,7 @@ export const getSubscriptionData = async (
     let durationMs = 0;
 
     if (resultData.planType === 'trial') {
-      durationMs = 2 * 60 * 1000; // 2 minutes (TESTING MODE - change back to 7 * 24 * 60 * 60 * 1000 for production)
+      durationMs = 1 * 60 * 1000; // 1 minutes (TESTING MODE - change back to 7 * 24 * 60 * 60 * 1000 for production)
     } else if (resultData.planType === 'monthly') {
       durationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
     } else if (resultData.planType === 'yearly') {
@@ -186,3 +189,14 @@ export const saveSubscriptionData = async (
     throw error;
   }
 };
+
+/**
+ * Mark trial expired notification as dismissed so the modal is not shown again.
+ */
+export const markTrialExpiredNotified = async (userEmail?: string | null): Promise<void> => {
+  const current = await getSubscriptionData(userEmail);
+  const updated = { ...current, trialExpiredNotified: true };
+  const key = updated.email ? `${SUBSCRIPTION_INFO_KEY}_${updated.email}` : SUBSCRIPTION_INFO_KEY;
+  await AsyncStorage.setItem(key, JSON.stringify(updated));
+};
+

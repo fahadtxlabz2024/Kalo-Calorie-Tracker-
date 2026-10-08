@@ -14,6 +14,7 @@ import {
 import React, { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 
 const LoginScreen = () => {
@@ -44,7 +45,19 @@ const LoginScreen = () => {
       if (error) {
         setErrorMessage(error.message);
       } else if (data.session) {
-        router.replace('/today');
+        const userEmail = email.trim();
+        const localFlag = await AsyncStorage.getItem(`@kalo_is_new_user_${userEmail}`);
+        const metaFlag = data.user?.user_metadata?.is_new_user;
+        const isNewUser = metaFlag === true || localFlag === 'true';
+
+        if (isNewUser) {
+          // Clear is_new_user flag so future logins go directly to /today
+          await AsyncStorage.removeItem(`@kalo_is_new_user_${userEmail}`);
+          await supabase.auth.updateUser({ data: { is_new_user: false } });
+          router.replace('/welcome');
+        } else {
+          router.replace('/today');
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'An unexpected error occurred.');
@@ -52,6 +65,7 @@ const LoginScreen = () => {
       setActivityLoading(false);
     }
   };
+
 
   return (
     <KeyboardAvoidingView

@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 
 export default function SplashScreen() {
@@ -14,7 +15,18 @@ export default function SplashScreen() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          router.replace('/today');
+          const userEmail = session.user?.email ?? '';
+          const localFlag = userEmail ? await AsyncStorage.getItem(`@kalo_is_new_user_${userEmail}`) : null;
+          const metaFlag = session.user?.user_metadata?.is_new_user;
+          const isNewUser = metaFlag === true || localFlag === 'true';
+
+          if (isNewUser) {
+            if (userEmail) await AsyncStorage.removeItem(`@kalo_is_new_user_${userEmail}`);
+            await supabase.auth.updateUser({ data: { is_new_user: false } });
+            router.replace('/welcome');
+          } else {
+            router.replace('/today');
+          }
         } else {
           router.replace('/auth/LoginScreen');
         }
@@ -22,6 +34,7 @@ export default function SplashScreen() {
         router.replace('/auth/LoginScreen');
       }
     };
+
 
     const timer = setTimeout(() => {
       checkAuthAndNavigate();
