@@ -111,14 +111,12 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Active Subscription Indicator Banner */}
-        <TouchableOpacity
+        {/* Active Subscription Indicator Banner (Non-interactive display) */}
+        <View
           style={[
             styles.activeSubCard,
             subInfo.isPro ? styles.activeSubCardPro : styles.activeSubCardFree,
           ]}
-          activeOpacity={0.85}
-          onPress={() => router.push('/subscriptions/subscriptions')}
         >
           <View style={styles.subCardLeft}>
             <View style={[styles.subIconBadge, subInfo.isPro ? styles.subIconBadgePro : styles.subIconBadgeFree]}>
@@ -138,7 +136,7 @@ export default function SettingsScreen() {
               {subInfo.badge}
             </Text>
           </View>
-        </TouchableOpacity>
+        </View>
 
 
         {/* First Settings Group (Goals & Preferences) */}
