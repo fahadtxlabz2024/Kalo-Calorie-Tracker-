@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.fahadhassan4611.kaloapp"
+      "bundleIdentifier": "com.fahadhassan4611.kaloapp",
+      "appleTeamId": "RDCBZ4L526"
     },
     "android": {
       "adaptiveIcon": {

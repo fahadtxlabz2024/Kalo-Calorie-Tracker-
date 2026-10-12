@@ -58,6 +58,65 @@ export const generateRandomCalorieGoal = (): {
 };
 
 /**
+ * Calculate personalized daily calorie target and macronutrients
+ * from user profile details (Mifflin-St Jeor formula).
+ */
+export const calculateCalorieGoalFromProfile = (
+  profile?: Partial<UserProfileData> | null
+): {
+  calorieGoal: number;
+  carbsGoal: number;
+  proteinGoal: number;
+  fatGoal: number;
+} => {
+  if (!profile) {
+    return generateRandomCalorieGoal();
+  }
+
+  const weightKg = parseFloat(profile.weight || '78') || 78;
+  const heightCm = parseFloat(profile.height || '172') || 172;
+  const ageYears = parseFloat(profile.age || '29') || 29;
+  const isMale = profile.sex === 'Male';
+
+  // Mifflin-St Jeor Equation for Basal Metabolic Rate (BMR)
+  const bmr = isMale
+    ? 10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5
+    : 10 * weightKg + 6.25 * heightCm - 5 * ageYears - 161;
+
+  // Physical Activity Level (PAL)
+  let activityMultiplier = 1.45; // Medium default
+  if (profile.activity === 'Low') {
+    activityMultiplier = 1.25;
+  } else if (profile.activity === 'High') {
+    activityMultiplier = 1.725;
+  }
+
+  const tdee = bmr * activityMultiplier;
+
+  // Goal adjustment: deficit for weight loss, surplus for weight gain
+  let targetKcal = tdee;
+  if (profile.goal === 'Lose') {
+    targetKcal = tdee - 450;
+  } else if (profile.goal === 'Gain') {
+    targetKcal = tdee + 400;
+  }
+
+  // Safe floor / ceiling boundaries
+  const minKcal = isMale ? 1500 : 1200;
+  const clampedKcal = Math.max(minKcal, Math.min(4500, targetKcal));
+
+  // Round to nearest 50 kcal
+  const calorieGoal = Math.round(clampedKcal / 50) * 50;
+
+  // Balanced Macro Split: ~45% Carbs, ~25% Protein, ~30% Fat
+  const carbsGoal = Math.round((calorieGoal * 0.45) / 4);
+  const proteinGoal = Math.round((calorieGoal * 0.25) / 4);
+  const fatGoal = Math.round((calorieGoal * 0.30) / 9);
+
+  return { calorieGoal, carbsGoal, proteinGoal, fatGoal };
+};
+
+/**
  * Load user profile from AsyncStorage and sync with Supabase user metadata if available.
  */
 export const getUserProfile = async (userEmail?: string | null): Promise<UserProfileData> => {

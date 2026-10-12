@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet, ScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
-import { saveUserProfile } from '../lib/userProfile';
+import { getUserProfile, saveUserProfile } from '../lib/userProfile';
 
 export default function AboutYouScreen() {
   const router = useRouter();
@@ -20,6 +20,25 @@ export default function AboutYouScreen() {
 
   // Track focused text input
   const [focusedField, setFocusedField] = useState<'age' | 'height' | 'weight' | null>(null);
+
+  // Pre-populate with existing profile if available
+  useEffect(() => {
+    let isMounted = true;
+    getUserProfile(user?.email).then((prof) => {
+      if (isMounted && prof) {
+        if (prof.goal) setGoal(prof.goal);
+        if (prof.sex) setSex(prof.sex);
+        if (prof.age) setAge(String(prof.age));
+        if (prof.height) setHeight(String(prof.height));
+        if (prof.weight) setWeight(String(prof.weight));
+        if (prof.activity) setActivity(prof.activity);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.email]);
 
   const handleContinue = async () => {
     try {

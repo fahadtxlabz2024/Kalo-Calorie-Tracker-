@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import {
+  calculateCalorieGoalFromProfile,
   generateRandomCalorieGoal,
   getUserProfile,
   saveUserProfile,
@@ -20,11 +21,14 @@ export default function YourPlanScreen() {
   useEffect(() => {
     let isMounted = true;
     const initPlan = async () => {
-      // 1. Generate new random calorie goal (2500 - 3000 kcal)
-      const randomKcal = generateRandomCalorieGoal();
-      
-      // 2. Save updated calorie goal to profile
-      const updated = await saveUserProfile(randomKcal, user?.email);
+      // 1. Fetch current profile details saved in Step 1 (About you)
+      const current = await getUserProfile(user?.email);
+
+      // 2. Compute tailored calorie goal and macro breakdown
+      const calculatedPlan = calculateCalorieGoalFromProfile(current);
+
+      // 3. Save updated plan goals to profile
+      const updated = await saveUserProfile(calculatedPlan, user?.email);
       if (isMounted) {
         setProfile(updated);
       }
@@ -38,7 +42,7 @@ export default function YourPlanScreen() {
 
   const handleLetsGo = () => {
     // Navigate to Main Dashboard screen
-    router.push('/today');
+    router.replace('/today');
   };
 
   const calorieGoalText = profile?.calorieGoal

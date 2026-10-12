@@ -7,17 +7,22 @@ import { Image as ExpoImage } from 'expo-image';
 import { X, Check } from 'lucide-react-native';
 
 import { useMeals } from '../context/MealContext';
+import { analyzeMealImage } from '../services/deepseekVisionService';
+import { Alert } from 'react-native';
 
 export default function AnalyzingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ imageUri?: string }>();
-  const { pendingImageUri } = useMeals();
+  const { pendingImageUri, setAnalyzedMealData } = useMeals();
   
   const rawUri = Array.isArray(params.imageUri) ? params.imageUri[0] : params.imageUri;
   const imageUri = pendingImageUri || rawUri || null;
 
   // Progress step state (1: Finding foods, 2: Estimating portions, 3: Counting calories)
   const [currentStep, setCurrentStep] = useState(1);
+  const [detectedSummary, setDetectedSummary] = useState<string>('Analyzing contents...');
+  const [portionSummary, setPortionSummary] = useState<string>('Estimating quantities...');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Animated scanner value
   const scanAnim = useRef(new Animated.Value(0)).current;
@@ -27,7 +32,7 @@ export default function AnalyzingScreen() {
 
   useEffect(() => {
     // 1. Scanning beam loop animation
-    Animated.loop(
+    const scanLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(scanAnim, {
           toValue: 200,
@@ -42,30 +47,108 @@ export default function AnalyzingScreen() {
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
+    scanLoop.start();
 
     // 2. Spinner rotation loop animation
-    Animated.loop(
+    const spinLoop = Animated.loop(
       Animated.timing(spinAnim, {
         toValue: 1,
         duration: 800,
         easing: Easing.linear,
         useNativeDriver: true,
       })
-    ).start();
+    );
+    spinLoop.start();
 
-    // 3. Fast & responsive step timeline progression (~2.2s total)
-    const timer1 = setTimeout(() => setCurrentStep(2), 750);
-    const timer2 = setTimeout(() => setCurrentStep(3), 1500);
-    const timer3 = setTimeout(() => {
-      // Complete analysis & navigate to result screen
-      router.replace('/result');
-    }, 2250);
+    let isMounted = true;
+
+    async function runAnalysis() {
+      if (!imageUri) {
+        // Fallback navigation if no image
+        setTimeout(() => router.replace('/result'), 1500);
+        return;
+      }
+
+      setIsAnalyzing(true);
+      const step2Timer = setTimeout(() => {
+        if (isMounted) setCurrentStep(2);
+      }, 1400);
+
+      try {
+        const mealResult = await analyzeMealImage(imageUri);
+        if (!isMounted) return;
+
+        clearTimeout(step2Timer);
+
+        if (!mealResult.isFood) {
+          Alert.alert(
+            'No Food Detected',
+            mealResult.notFoodReason || 'We could not detect any food or drink in this photo. Please retake the photo with your meal clearly visible.',
+            [
+              { text: 'Retake Photo', onPress: () => router.replace('/camera') },
+              { text: 'Cancel', style: 'cancel', onPress: () => router.replace('/today') },
+            ]
+          );
+          return;
+        }
+
+        setCurrentStep(2);
+
+        // Update UI with real detected items
+        const itemNames = mealResult.items.map(i => i.name).slice(0, 3).join(', ');
+        setDetectedSummary(itemNames || mealResult.title);
+
+        const portions = mealResult.items.map(i => i.portion).slice(0, 3).join(', ');
+        setPortionSummary(portions);
+
+        setCurrentStep(3);
+
+        // Allow user to briefly see final step before navigation
+        setTimeout(() => {
+          if (isMounted) {
+            setAnalyzedMealData(mealResult);
+            router.replace('/result');
+          }
+        }, 800);
+      } catch (error: any) {
+        console.error('Error analyzing meal:', error);
+        if (!isMounted) return;
+
+        if (error?.message === 'HF_TOKEN_MISSING') {
+          Alert.alert(
+            'Hugging Face Token Needed',
+            'Please add your EXPO_PUBLIC_HF_TOKEN in your .env file to enable DeepSeek-V4.1-Flash vision analysis.',
+            [
+              { text: 'Go Back', style: 'cancel', onPress: () => router.back() },
+              { 
+                text: 'Use Demo Mode', 
+                onPress: () => router.replace('/result') 
+              }
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Analysis Failed',
+            'Could not analyze meal image with DeepSeek-V4.1-Flash. Would you like to retry or use estimated demo data?',
+            [
+              { text: 'Retry', onPress: () => runAnalysis() },
+              { text: 'Use Demo Data', onPress: () => router.replace('/result') },
+              { text: 'Cancel', style: 'cancel', onPress: () => router.back() },
+            ]
+          );
+        }
+      } finally {
+        if (isMounted) setIsAnalyzing(false);
+      }
+    }
+
+    runAnalysis();
 
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
+      isMounted = false;
+      scanLoop.stop();
+      spinLoop.stop();
     };
   }, [imageUri]);
 
@@ -171,7 +254,7 @@ export default function AnalyzingScreen() {
             <View style={styles.stepTextContainer}>
               <Text style={styles.stepTitle}>Finding the foods</Text>
               {currentStep >= 1 && (
-                <Text style={styles.stepSubtitle}>Chicken, rice, salad</Text>
+                <Text style={styles.stepSubtitle}>{detectedSummary}</Text>
               )}
             </View>
           </View>
@@ -192,7 +275,7 @@ export default function AnalyzingScreen() {
                 Estimating portions
               </Text>
               {currentStep >= 2 && (
-                <Text style={styles.stepSubtitle}>About 150 g, 1 cup, 1 bowl</Text>
+                <Text style={styles.stepSubtitle}>{portionSummary}</Text>
               )}
             </View>
           </View>

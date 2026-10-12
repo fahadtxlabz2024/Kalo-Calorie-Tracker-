@@ -36,7 +36,7 @@ export default function ResultScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ imageUri?: string }>();
   const segments = useSegments();
-  const { pendingImageUri, addMeal } = useMeals();
+  const { pendingImageUri, addMeal, analyzedMealData } = useMeals();
   
   const rawUri = Array.isArray(params.imageUri) ? params.imageUri[0] : params.imageUri;
   const imageUri = pendingImageUri || rawUri || null;
@@ -45,34 +45,45 @@ export default function ResultScreen() {
     console.log('I am on the screen:', segments);
   };
 
-  // Generate a random meal result between 500 and 1100 kcal
+  // Use real AI analyzed meal data from DeepSeek if available, otherwise generate fallback
   const mealData = useMemo(() => {
-    // 1. Pick total calories between 500 and 1100
-    const totalKcal = Math.floor(Math.random() * (1100 - 500 + 1)) + 500;
-
-    // 2. Select 3 random food items
-    const protein = PROTEIN_OPTIONS[Math.floor(Math.random() * PROTEIN_OPTIONS.length)];
-    const carb = CARB_OPTIONS[Math.floor(Math.random() * CARB_OPTIONS.length)];
-    const side = SIDE_OPTIONS[Math.floor(Math.random() * SIDE_OPTIONS.length)];
-
-    // 3. Divide calories among the 3 items so they sum up to totalKcal
-    const proteinKcal = Math.round(totalKcal * 0.44);
-    const carbKcal = Math.round(totalKcal * 0.36);
-    const sideKcal = totalKcal - proteinKcal - carbKcal;
-
-    // 4. Calculate macros
-    const carbsGrams = Math.round((totalKcal * 0.40) / 4);
-    const proteinGrams = Math.round((totalKcal * 0.36) / 4);
-    const fatGrams = Math.round((totalKcal * 0.24) / 9);
-
-    // 5. Short title (e.g. "Chicken, rice & salad")
-    const title = `${protein.name.split(' ')[1] || protein.name}, ${carb.name.split(' ')[1] || carb.name} & salad`;
-
-    // 6. Time string
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
     const mins = String(now.getMinutes()).padStart(2, '0');
     const timeString = `Today, ${hours}:${mins}`;
+
+    if (analyzedMealData) {
+      return {
+        totalKcal: analyzedMealData.totalKcal,
+        carbsGrams: analyzedMealData.carbsGrams,
+        proteinGrams: analyzedMealData.proteinGrams,
+        fatGrams: analyzedMealData.fatGrams,
+        title: analyzedMealData.title,
+        timeString,
+        items: analyzedMealData.items,
+      };
+    }
+
+    // Fallback: Pick total calories between 500 and 1100
+    const totalKcal = Math.floor(Math.random() * (1100 - 500 + 1)) + 500;
+
+    // Select 3 random food items
+    const protein = PROTEIN_OPTIONS[Math.floor(Math.random() * PROTEIN_OPTIONS.length)];
+    const carb = CARB_OPTIONS[Math.floor(Math.random() * CARB_OPTIONS.length)];
+    const side = SIDE_OPTIONS[Math.floor(Math.random() * SIDE_OPTIONS.length)];
+
+    // Divide calories among the 3 items so they sum up to totalKcal
+    const proteinKcal = Math.round(totalKcal * 0.44);
+    const carbKcal = Math.round(totalKcal * 0.36);
+    const sideKcal = totalKcal - proteinKcal - carbKcal;
+
+    // Calculate macros
+    const carbsGrams = Math.round((totalKcal * 0.40) / 4);
+    const proteinGrams = Math.round((totalKcal * 0.36) / 4);
+    const fatGrams = Math.round((totalKcal * 0.24) / 9);
+
+    // Short title
+    const title = `${protein.name.split(' ')[1] || protein.name}, ${carb.name.split(' ')[1] || carb.name} & salad`;
 
     return {
       totalKcal,
@@ -87,7 +98,7 @@ export default function ResultScreen() {
         { name: side.name, portion: side.portion, kcal: sideKcal },
       ],
     };
-  }, []);
+  }, [analyzedMealData]);
 
   const handleDone = () => {
     const now = new Date();

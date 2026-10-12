@@ -26,6 +26,7 @@ export default function RootLayout() {
               <Stack.Screen name="plan" />
               <Stack.Screen name="today" />
               <Stack.Screen name="settings" />
+              <Stack.Screen name="profileDetails" />
               <Stack.Screen name="subscriptions/subscriptions" />
               <Stack.Screen name="subscriptions/reviewSubscriptionDetail" />
             </Stack>

@@ -19,6 +19,15 @@ export interface Meal {
   items?: MealItem[];
 }
 
+export interface AnalyzedMealData {
+  title: string;
+  totalKcal: number;
+  carbsGrams: number;
+  proteinGrams: number;
+  fatGrams: number;
+  items: MealItem[];
+}
+
 // Initial meals start empty so first navigation shows empty state
 const INITIAL_MEALS: Meal[] = [];
 
@@ -29,6 +38,8 @@ interface MealContextType {
   clearMeals: () => void;
   pendingImageUri: string | null;
   setPendingImageUri: (uri: string | null) => void;
+  analyzedMealData: AnalyzedMealData | null;
+  setAnalyzedMealData: (data: AnalyzedMealData | null) => void;
 }
 
 const MealContext = createContext<MealContextType | undefined>(undefined);
@@ -36,6 +47,7 @@ const MealContext = createContext<MealContextType | undefined>(undefined);
 export function MealProvider({ children }: { children: ReactNode }) {
   const [meals, setMeals] = useState<Meal[]>(INITIAL_MEALS);
   const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
+  const [analyzedMealData, setAnalyzedMealData] = useState<AnalyzedMealData | null>(null);
 
   const addMeal = (newMeal: Omit<Meal, 'id'>) => {
     const mealWithId: Meal = {
@@ -61,7 +73,9 @@ export function MealProvider({ children }: { children: ReactNode }) {
         removeMeal, 
         clearMeals, 
         pendingImageUri, 
-        setPendingImageUri 
+        setPendingImageUri,
+        analyzedMealData,
+        setAnalyzedMealData,
       }}
     >
       {children}

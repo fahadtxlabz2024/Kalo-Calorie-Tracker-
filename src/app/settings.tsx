@@ -1,136 +1,92 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch, Modal, Pressable } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { 
   ChevronLeft, 
   Sparkles, 
   Target, 
   User, 
-  Bell, 
-  Ruler, 
   Cloud, 
   HelpCircle, 
   ShieldCheck, 
-  Trash2, 
   LogOut,
   ChevronRight,
-  ChevronDown,
-  Check
+  CheckCircle2,
 } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMeals } from '../context/MealContext';
 import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
 import { getSubscriptionData } from '../lib/subscriptionStorage';
 import { getUserProfile, UserProfileData, DEFAULT_USER_PROFILE } from '../lib/userProfile';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { clearMeals } = useMeals();
   const { signOut, user } = useAuth();
 
   // Subscription state
   const [hasUsedTrial, setHasUsedTrial] = useState<boolean>(false);
   const [planType, setPlanType] = useState<string>('none');
   const [userProfile, setUserProfile] = useState<UserProfileData>(DEFAULT_USER_PROFILE);
-
-  useEffect(() => {
-    let isMounted = true;
-    getSubscriptionData(user?.email).then((data) => {
-      if (isMounted) {
-        setHasUsedTrial(data.hasUsedTrial);
-        setPlanType(data.planType);
-      }
-    });
-
-    getUserProfile(user?.email).then((prof) => {
-      if (isMounted) {
-        setUserProfile(prof);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.email]);
-
-  // Interactive settings state
-  const [mealReminders, setMealReminders] = useState(true);
-  const [unitSystem, setUnitSystem] = useState<'metric' | 'imperial'>('metric');
   const [backupData, setBackupData] = useState(false);
-  const [showUnitsDropdown, setShowUnitsDropdown] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
-  // Dynamic unit strings and conversion based on userProfile from About screen
-  const unitText = unitSystem === 'metric' ? 'kg · cm' : 'lbs · ft/in';
-  const rawWeight = userProfile.weight || '78';
-  const rawHeight = userProfile.height || '172';
-  const weightNum = parseFloat(rawWeight) || 78;
-  const heightNum = parseFloat(rawHeight) || 172;
-
-  const displayWeight = unitSystem === 'metric'
-    ? `${weightNum} kg`
-    : `${Math.round(weightNum * 2.20462)} lbs`;
-
-  const displayHeight = unitSystem === 'metric'
-    ? `${heightNum} cm`
-    : `${Math.floor(heightNum / 30.48)}' ${Math.round((heightNum % 30.48) / 2.54)}"`;
-
-  const detailsText = `${displayWeight} · ${displayHeight}`;
-  const calorieGoalText = `${(userProfile.calorieGoal || 2650).toLocaleString()} kcal`;
-
-
-  const selectUnitSystem = (system: 'metric' | 'imperial') => {
-    setUnitSystem(system);
-    setShowUnitsDropdown(false);
-  };
-
-  const handleConfirmDeleteAccount = async () => {
-    setDeleting(true);
-    try {
-      if (user) {
-        // 1. Delete user from Supabase Auth (auth.users) via RPC function
-        const { error: rpcError } = await supabase.rpc('delete_user');
-        if (rpcError) {
-          console.warn('Supabase delete_user RPC warning:', rpcError.message);
-          // Fallback manual table row delete if RPC function has not been created yet
-          if (user.email) {
-            await supabase.from('subscriptions').delete().eq('email', user.email);
-          }
+  // Reload profile & subscription whenever screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      getSubscriptionData(user?.email).then((data) => {
+        if (isMounted) {
+          setHasUsedTrial(data.hasUsedTrial);
+          setPlanType(data.planType);
         }
-      }
+      });
 
-      // 2. Clear local meals state & AsyncStorage keys completely
-      clearMeals();
+      getUserProfile(user?.email).then((prof) => {
+        if (isMounted) {
+          setUserProfile(prof);
+        }
+      });
 
-      if (user?.email) {
-        await AsyncStorage.removeItem(`@kalo_is_new_user_${user.email}`);
-        await AsyncStorage.removeItem(`@kalo_user_profile_${user.email}`);
-      }
-      await AsyncStorage.clear();
+      return () => {
+        isMounted = false;
+      };
+    }, [user?.email])
+  );
 
-      // 3. Sign out session
-      await signOut();
-
-      setShowDeleteModal(false);
-      router.replace('/auth/LoginScreen');
-    } catch (error) {
-      console.error('Error deleting account:', error);
-      if (user?.email) {
-        await AsyncStorage.removeItem(`@kalo_is_new_user_${user.email}`);
-        await AsyncStorage.removeItem(`@kalo_user_profile_${user.email}`);
-      }
-      await AsyncStorage.clear();
-      await signOut();
-      setShowDeleteModal(false);
-      router.replace('/auth/LoginScreen');
-    } finally {
-      setDeleting(false);
+  // Helper to determine active subscription indicator metadata
+  const getSubInfo = () => {
+    if (planType === 'trial') {
+      return {
+        title: '7-Day Free Trial',
+        subtitle: 'Full access to unlimited meal photos',
+        badge: 'ACTIVE TRIAL',
+        isPro: true,
+      };
     }
+    if (planType === 'monthly') {
+      return {
+        title: 'KALO PLUS - Monthly',
+        subtitle: '$4.99 / month · Billed monthly',
+        badge: 'ACTIVE',
+        isPro: true,
+      };
+    }
+    if (planType === 'yearly') {
+      return {
+        title: 'KALO PLUS - Yearly',
+        subtitle: '$29.99 / year · Billed annually',
+        badge: 'ACTIVE',
+        isPro: true,
+      };
+    }
+    return {
+      title: 'Free Plan',
+      subtitle: hasUsedTrial ? '3 free meal photos per day (Trial used)' : '3 free meal photos per day',
+      badge: 'FREE PLAN',
+      isPro: false,
+    };
   };
+
+  const subInfo = getSubInfo();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,91 +111,67 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Kalo Plus Promo Banner - Hidden when trial has been used or active subscription */}
-        {!hasUsedTrial && planType === 'none' && (
-          <TouchableOpacity
-            style={styles.kaloPlusCard}
-            activeOpacity={0.85}
-            onPress={() => router.push('/subscriptions/subscriptions')}
-          >
-            <View style={styles.kaloPlusLeft}>
-              <View style={styles.starBadge}>
-                <Sparkles size={22} color="#121C16" fill="#121C16" />
-              </View>
-              <View style={styles.kaloPlusTextGroup}>
-                <Text style={styles.kaloPlusTitle}>Kalo Plus</Text>
-                <Text style={styles.kaloPlusSubtitle}>Unlimited meal photos</Text>
-              </View>
+        {/* Active Subscription Indicator Banner */}
+        <TouchableOpacity
+          style={[
+            styles.activeSubCard,
+            subInfo.isPro ? styles.activeSubCardPro : styles.activeSubCardFree,
+          ]}
+          activeOpacity={0.85}
+          onPress={() => router.push('/subscriptions/subscriptions')}
+        >
+          <View style={styles.subCardLeft}>
+            <View style={[styles.subIconBadge, subInfo.isPro ? styles.subIconBadgePro : styles.subIconBadgeFree]}>
+              <Sparkles size={22} color={subInfo.isPro ? '#17A558' : '#64748B'} fill={subInfo.isPro ? '#17A558' : 'none'} />
             </View>
+            <View style={styles.subTextGroup}>
+              <Text style={[styles.subTitleText, subInfo.isPro ? styles.subTitleTextPro : styles.subTitleTextFree]}>
+                {subInfo.title}
+              </Text>
+              <Text style={styles.subSubtitleText}>{subInfo.subtitle}</Text>
+            </View>
+          </View>
 
-            <View style={styles.tryFreeButton}>
-              <Text style={styles.tryFreeText}>Try free</Text>
-            </View>
-          </TouchableOpacity>
-        )}
+          <View style={[styles.statusBadgePill, subInfo.isPro ? styles.statusBadgePro : styles.statusBadgeFree]}>
+            {subInfo.isPro && <CheckCircle2 size={12} color="#FFFFFF" style={{ marginRight: 4 }} />}
+            <Text style={[styles.statusBadgeText, subInfo.isPro ? styles.statusBadgeTextPro : styles.statusBadgeTextFree]}>
+              {subInfo.badge}
+            </Text>
+          </View>
+        </TouchableOpacity>
 
 
         {/* First Settings Group (Goals & Preferences) */}
         <View style={styles.sectionCard}>
-          {/* Daily Goal (No arrow) */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingLeft}>
-              <Target size={20} color="#0F172A" />
-              <Text style={styles.settingLabel}>Daily goal</Text>
-            </View>
-            <View style={styles.settingRight}>
-              <Text style={styles.settingValue}>{calorieGoalText}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* My Details (No arrow, dynamic conversion) */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingLeft}>
-              <User size={20} color="#0F172A" />
-              <Text style={styles.settingLabel}>My details</Text>
-            </View>
-            <View style={styles.settingRight}>
-              <Text style={styles.settingValue}>{detailsText}</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Meal Reminders (Toggle Switch) */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingLeft}>
-              <Bell size={20} color="#0F172A" />
-              <Text style={styles.settingLabel}>Meal reminders</Text>
-            </View>
-            <View style={styles.settingRight}>
-              <Text style={styles.settingValue}>{mealReminders ? 'On' : 'Off'}</Text>
-              <Switch
-                value={mealReminders}
-                onValueChange={setMealReminders}
-                trackColor={{ false: '#E2E8F0', true: '#17A558' }}
-                thumbColor="#FFFFFF"
-                style={styles.switchControl}
-              />
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Units (Opens Dropdown Selector) */}
+          {/* Profile Details (Opens ProfileDetails Screen) */}
           <TouchableOpacity 
             style={styles.settingRow} 
-            onPress={() => setShowUnitsDropdown(true)} 
+            onPress={() => router.push('/profileDetails')} 
             activeOpacity={0.7}
           >
             <View style={styles.settingLeft}>
-              <Ruler size={20} color="#0F172A" />
-              <Text style={styles.settingLabel}>Units</Text>
+              <User size={20} color="#0F172A" />
+              <Text style={styles.settingLabel}>Profile Details</Text>
             </View>
             <View style={styles.settingRight}>
-              <Text style={styles.settingValue}>{unitText}</Text>
-              <ChevronDown size={18} color="#94A3B8" />
+              <ChevronRight size={18} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          {/* Set up a new plan (Opens About Screen) */}
+          <TouchableOpacity 
+            style={styles.settingRow} 
+            onPress={() => router.push('/about')} 
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <Target size={20} color="#0F172A" />
+              <Text style={styles.settingLabel}>Set up a new plan</Text>
+            </View>
+            <View style={styles.settingRight}>
+              <ChevronRight size={18} color="#94A3B8" />
             </View>
           </TouchableOpacity>
 
@@ -306,21 +238,8 @@ export default function SettingsScreen() {
               <Text style={[styles.settingLabel, { color: '#EF4444' }]}>Sign out</Text>
             </View>
           </TouchableOpacity>
-
-          <View style={styles.divider} />
-
-          {/* Delete Account */}
-          <TouchableOpacity 
-            style={styles.settingRow} 
-            activeOpacity={0.7}
-            onPress={() => setShowDeleteModal(true)}
-          >
-            <View style={styles.settingLeft}>
-              <Trash2 size={20} color="#EF4444" />
-              <Text style={[styles.settingLabel, { color: '#EF4444' }]}>Delete account</Text>
-            </View>
-          </TouchableOpacity>
         </View>
+
 
 
         {/* Footer Info Note */}
@@ -328,127 +247,6 @@ export default function SettingsScreen() {
           Meal photos are analysed by AI to estimate calories.
         </Text>
       </ScrollView>
-
-      {/* Units Dropdown Bottom Sheet Modal */}
-      <Modal
-        visible={showUnitsDropdown}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowUnitsDropdown(false)}
-      >
-        <View style={styles.dropdownModalOverlay}>
-          <Pressable 
-            style={styles.dropdownBackdrop} 
-            onPress={() => setShowUnitsDropdown(false)} 
-          />
-
-          <View style={styles.dropdownSheetContainer}>
-            <View style={styles.dropdownDragHandle} />
-
-            <Text style={styles.dropdownTitle}>Select Units</Text>
-            <Text style={styles.dropdownSubtitle}>
-              Choose your preferred unit system for weight and height.
-            </Text>
-
-            <View style={styles.dropdownOptionsList}>
-              {/* Option 1: Metric */}
-              <TouchableOpacity
-                style={[
-                  styles.dropdownOptionCard,
-                  unitSystem === 'metric' && styles.dropdownOptionCardSelected
-                ]}
-                activeOpacity={0.7}
-                onPress={() => selectUnitSystem('metric')}
-              >
-                <View>
-                  <Text style={[
-                    styles.dropdownOptionTitle,
-                    unitSystem === 'metric' && styles.dropdownOptionTitleSelected
-                  ]}>
-                    Metric (kg, cm)
-                  </Text>
-                  <Text style={styles.dropdownOptionSubtext}>Kilograms & Centimeters</Text>
-                </View>
-
-                {unitSystem === 'metric' ? (
-                  <View style={styles.checkBadge}>
-                    <Check size={16} color="#FFFFFF" strokeWidth={3} />
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-
-              {/* Option 2: Imperial */}
-              <TouchableOpacity
-                style={[
-                  styles.dropdownOptionCard,
-                  unitSystem === 'imperial' && styles.dropdownOptionCardSelected
-                ]}
-                activeOpacity={0.7}
-                onPress={() => selectUnitSystem('imperial')}
-              >
-                <View>
-                  <Text style={[
-                    styles.dropdownOptionTitle,
-                    unitSystem === 'imperial' && styles.dropdownOptionTitleSelected
-                  ]}>
-                    Imperial (lbs, ft/in)
-                  </Text>
-                  <Text style={styles.dropdownOptionSubtext}>Pounds, Feet & Inches</Text>
-                </View>
-
-                {unitSystem === 'imperial' ? (
-                  <View style={styles.checkBadge}>
-                    <Check size={16} color="#FFFFFF" strokeWidth={3} />
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Delete Account Confirmation Modal */}
-      <Modal
-        visible={showDeleteModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContentBox}>
-            <View style={styles.modalIconBadge}>
-              <Trash2 size={28} color="#EF4444" />
-            </View>
-
-            <Text style={styles.modalTitle}>Delete account?</Text>
-            <Text style={styles.modalDescription}>
-              This will permanently remove your account, subscription records, and clear all local data. This action cannot be undone.
-            </Text>
-
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity 
-                style={styles.cancelButton} 
-                activeOpacity={0.7}
-                onPress={() => setShowDeleteModal(false)}
-                disabled={deleting}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.deleteButton} 
-                activeOpacity={0.85}
-                onPress={handleConfirmDeleteAccount}
-                disabled={deleting}
-              >
-                <Text style={styles.deleteButtonText}>
-                  {deleting ? 'Deleting...' : 'Delete Account'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -486,6 +284,85 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 32,
+  },
+  activeSubCard: {
+    borderRadius: 24,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  activeSubCardPro: {
+    backgroundColor: '#121C16',
+  },
+  activeSubCardFree: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  subCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
+  },
+  subIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  subIconBadgePro: {
+    backgroundColor: 'rgba(23, 165, 88, 0.15)',
+  },
+  subIconBadgeFree: {
+    backgroundColor: '#F1F5F9',
+  },
+  subTextGroup: {
+    justifyContent: 'center',
+    flex: 1,
+  },
+  subTitleText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  subTitleTextPro: {
+    color: '#FFFFFF',
+  },
+  subTitleTextFree: {
+    color: '#0F172A',
+  },
+  subSubtitleText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '400',
+    marginTop: 2,
+  },
+  statusBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  statusBadgePro: {
+    backgroundColor: '#17A558',
+  },
+  statusBadgeFree: {
+    backgroundColor: '#F1F5F9',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  statusBadgeTextPro: {
+    color: '#FFFFFF',
+  },
+  statusBadgeTextFree: {
+    color: '#64748B',
   },
   kaloPlusCard: {
     backgroundColor: '#121C16',
@@ -587,161 +464,5 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
     paddingHorizontal: 4,
-  },
-
-  /* Dropdown Bottom Sheet Styles */
-  dropdownModalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  dropdownBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-  },
-  dropdownSheetContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    paddingBottom: 36,
-  },
-  dropdownDragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  dropdownTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  dropdownSubtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748B',
-    marginBottom: 20,
-  },
-  dropdownOptionsList: {
-    gap: 12,
-  },
-  dropdownOptionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-  },
-  dropdownOptionCardSelected: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#17A558',
-  },
-  dropdownOptionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  dropdownOptionTitleSelected: {
-    color: '#17A558',
-  },
-  dropdownOptionSubtext: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  checkBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#17A558',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  /* Confirmation Modal Styles */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  modalContentBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 24,
-    width: '100%',
-    maxWidth: 340,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  modalIconBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 8,
-  },
-  modalDescription: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  modalButtonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: '#F1F5F9',
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#475569',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  deleteButton: {
-    flex: 1,
-    backgroundColor: '#EF4444',
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });
