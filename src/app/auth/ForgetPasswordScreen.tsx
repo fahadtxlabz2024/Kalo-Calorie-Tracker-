@@ -5,8 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
@@ -37,7 +35,7 @@ const ForgetPasswordScreen = () => {
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: 'kaloapp://reset-password',
+        redirectTo: 'kaloapp://auth/ResetPasswordScreen',
       });
 
       if (error) {
@@ -53,22 +51,20 @@ const ForgetPasswordScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: '#F5F7F2' }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            paddingVertical: 40,
-            paddingHorizontal: 20,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: '#F5F7F2' }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingVertical: 40,
+          paddingHorizontal: 20,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets={true}
+      >
           <Image
             source={require('../../../assets/icons/Kalo-mark.svg')}
             style={{ width: 70, height: 70, alignSelf: 'center', marginBottom: 10 }}
@@ -227,8 +223,7 @@ const ForgetPasswordScreen = () => {
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
-  );
+    );
 };
 
 export default ForgetPasswordScreen;
